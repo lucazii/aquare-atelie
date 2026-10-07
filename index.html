@@ -512,29 +512,51 @@ function abrir(){if(dlg.showModal)dlg.showModal();else dlg.setAttribute('open','
 document.getElementById('abrir-estudio').addEventListener('click',abrir);
 document.getElementById('abrir-estudio-2').addEventListener('click',abrir);
 var aviso=document.getElementById('aviso-estudio'),obra=document.getElementById('obra-visitante');
-function mostrar(texto){
+var LINK_DESENHO='https://wa.me/5575992212817?text=Oi%21%20Fiz%20um%20desenho%20no%20site%20do%20Aquare%20Ateli%C3%AA%20e%20vou%20te%20mandar%20aqui.';
+function mostrar(texto,comLink){
   obra.src=cv.toDataURL('image/jpeg',.9);obra.hidden=false;document.getElementById('convite').style.display='none';
   aviso.textContent=texto+' ';
-  var l=document.createElement('a');l.className='botao';l.href='https://wa.me/5575992212817?text=Oi%21%20Fiz%20um%20desenho%20no%20site%20do%20Aquare%20Ateli%C3%AA%20e%20vou%20te%20mandar%20aqui.';l.target='_blank';l.rel='noopener';l.textContent='Abrir o WhatsApp do ateliê';
-  aviso.appendChild(document.createElement('br'));aviso.appendChild(l);
+  if(comLink){
+    var l=document.createElement('a');l.className='botao';l.href=LINK_DESENHO;l.target='_blank';l.rel='noopener';l.textContent='Abrir o WhatsApp do ateliê';
+    aviso.appendChild(document.createElement('br'));aviso.appendChild(l);
+  }
   aviso.hidden=false;dlg.close();
   document.getElementById('pintar').scrollIntoView({block:'center'});
 }
 function baixar(blob){
   try{var u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='desenho-aquare.jpg';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000)}catch(e){}
 }
-document.getElementById('enviar').addEventListener('click',function(){
+/* envio direto para a pasta "desenhos" do ateliê (so aceita envio; ninguem de fora consegue ver nem apagar) */
+var NUVEM='https://iuxifyfmlmhunlhovjqm.supabase.co',CHAVE='sb_publishable_gzR51qlJ8zZVAk_g4yeczg_-lXRW1BO';
+function subir(blob,nome,comAuth){
+  var limpo=(nome||'visitante').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,30)||'visitante';
+  var arquivo=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'-'+Math.random().toString(36).slice(2,7)+'-'+limpo+'.jpg';
+  var cab={'apikey':CHAVE,'Content-Type':'image/jpeg','x-upsert':'false'};if(comAuth)cab['Authorization']='Bearer '+CHAVE;
+  return fetch(NUVEM+'/storage/v1/object/desenhos/'+arquivo,{method:'POST',headers:cab,body:blob}).then(function(r){if(!r.ok)throw new Error('envio '+r.status);return true});
+}
+function planoB(blob,nome){
+  var arq=null;try{arq=new File([blob],'desenho-aquare.jpg',{type:'image/jpeg'})}catch(e){}
+  var dados=arq?{files:[arq],title:'Meu desenho para o Aquare Ateliê',text:'Meu desenho para o Aquare Ateliê'+(nome?' ('+nome+')':'')}:null;
+  if(dados&&navigator.canShare&&navigator.canShare(dados)){
+    navigator.share(dados).then(function(){mostrar('Obrigada por deixar a sua arte! Se você ainda não mandou para o ateliê, abra a conversa e envie o desenho por lá.',true)}).catch(function(){mostrar('Seu desenho está no cavalete. Para enviar, abra a conversa do ateliê e mande a imagem por lá.',true)});
+  }else{
+    baixar(blob);mostrar('Seu desenho foi salvo no seu aparelho. Agora abra a conversa do ateliê e anexe a imagem.',true);
+  }
+}
+var botaoEnviar=document.getElementById('enviar'),enviando=false;
+botaoEnviar.addEventListener('click',function(){
+  if(enviando)return;
   if(!sujo){document.getElementById('estudio-titulo').textContent='Pinte alguma coisa antes de enviar';return}
   var nome=document.getElementById('autor').value.trim();
+  enviando=true;botaoEnviar.textContent='Enviando...';
+  function fim(){enviando=false;botaoEnviar.textContent='Enviar desenho'}
+  function mandar(blob){
+    subir(blob,nome,true).catch(function(){return subir(blob,nome,false)}).then(function(){
+      fim();mostrar('Desenho enviado! Obrigada por deixar a sua arte no ateliê.',false);
+    }).catch(function(){fim();planoB(blob,nome)});
+  }
   cv.toBlob(function(blob){
-    var arq=null;try{arq=new File([blob],'desenho-aquare.jpg',{type:'image/jpeg'})}catch(e){}
-    var dados=arq?{files:[arq],title:'Meu desenho para o Aquare Ateliê',text:'Meu desenho para o Aquare Ateliê'+(nome?' ('+nome+')':'')}:null;
-    if(dados&&navigator.canShare&&navigator.canShare(dados)){
-      navigator.share(dados).then(function(){mostrar('Obrigada por deixar a sua arte! Se você ainda não mandou para o ateliê, abra a conversa e envie o desenho por lá.')}).catch(function(){mostrar('Seu desenho está no cavalete. Para enviar, abra a conversa do ateliê e mande a imagem por lá.')});
-    }else{
-      baixar(blob);
-      mostrar('Seu desenho foi salvo no seu aparelho. Agora abra a conversa do ateliê e anexe a imagem.');
-    }
+    if(blob&&blob.size>1000000){cv.toBlob(function(menor){mandar(menor||blob)},'image/jpeg',.7)}else{mandar(blob)}
   },'image/jpeg',.9);
 });
 })();
